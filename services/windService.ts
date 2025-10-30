@@ -120,17 +120,19 @@ async function fetchWindyApiData(sourceId: string): Promise<RawHourlyData[]> {
 
 
 async function fetchDataSources(): Promise<{ data: { [key: string]: RawHourlyData[] }, statuses: SourceStatus[] }> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_API_KEY });
 
     const data: { [key: string]: RawHourlyData[] } = {};
     const statuses: SourceStatus[] = [];
 
     const promises = SOURCES_CONFIG.map(async (source) => {
+        let isGenerated = true; // Default to true, assume generation unless API succeeds
         // If it's the Windy source, try the API first
         if (source.id === 'windyapp_osorio') {
             const apiData = await fetchWindyApiData(source.id);
             if (apiData.length > 0) {
-                return { id: source.id, data: apiData, status: 'ok' as const, sourceConfig: source };
+                 isGenerated = false;
+                return { id: source.id, data: apiData, status: 'ok' as const, sourceConfig: source, generated: isGenerated };
             }
             console.log('Windy API failed, falling back to Gemini generation.');
         }
@@ -156,10 +158,10 @@ async function fetchDataSources(): Promise<{ data: { [key: string]: RawHourlyDat
             const parsedData = JSON.parse(jsonText) as Omit<RawHourlyData, 'fonte'>[];
             const finalData = parsedData.map(d => ({ ...d, fonte: source.id }));
 
-            return { id: source.id, data: finalData, status: 'ok' as const, sourceConfig: source };
+            return { id: source.id, data: finalData, status: 'ok' as const, sourceConfig: source, generated: isGenerated };
         } catch (error) {
             console.error(`Error fetching real-time data for source ${source.name} (${source.location}):`, error);
-            return { id: source.id, data: [], status: 'falha' as const, sourceConfig: source };
+            return { id: source.id, data: [], status: 'falha' as const, sourceConfig: source, generated: isGenerated };
         }
     });
 
@@ -172,6 +174,7 @@ async function fetchDataSources(): Promise<{ data: { [key: string]: RawHourlyDat
             name: result.sourceConfig.name,
             location: result.sourceConfig.location,
             status: result.status,
+            generated: result.generated,
         });
     });
 

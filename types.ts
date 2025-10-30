@@ -33,6 +33,7 @@ export type SourceStatus = {
   name: string;
   location: string;
   status: 'ok' | 'falha';
+  generated: boolean;
 };
 
 // Data for the main summary panel

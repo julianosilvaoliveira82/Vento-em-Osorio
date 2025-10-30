@@ -84,6 +84,9 @@ const SourcesStatus: React.FC<SourcesStatusProps> = ({ sources }) => {
                       >
                         {source.name}
                       </a>
+                      {source.generated && (
+                        <span className="text-xs text-slate-500 italic">(gerado por IA)</span>
+                      )}
                     </div>
                     <span className={`font-medium text-xs ${source.status === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
                       {source.status === 'ok' ? 'Online' : 'Falha'}

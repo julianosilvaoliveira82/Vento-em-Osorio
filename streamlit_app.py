@@ -82,8 +82,8 @@ def fetch_forecast() -> pd.DataFrame:
             "wind_direction_10m": "winddirection_10m"
         }, inplace=True)
 
-        # Certificar que a coluna 'time' é do tipo datetime
-        df["time"] = pd.to_datetime(df["time"])
+        # Converter para datetime e localizar para o fuso horário correto
+        df["time"] = pd.to_datetime(df["time"]).dt.tz_localize("America/Sao_Paulo")
         return df
 
     except requests.exceptions.RequestException as e:

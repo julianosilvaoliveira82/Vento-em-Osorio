@@ -1,0 +1,5 @@
+{
+  "name": "Vento Osório",
+  "description": "Um painel minimalista para análise e previsão de vento em Osório, RS, consolidando dados de múltiplas fontes para fornecer uma visão clara e ponderada das condições de vento.",
+  "requestFramePermissions": []
+}

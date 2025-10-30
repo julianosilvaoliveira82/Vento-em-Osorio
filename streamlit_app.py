@@ -58,20 +58,40 @@ st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 # ---------- Utilidades ----------
 @st.cache_data(ttl=1800)
-def fetch_forecast(lat: float, lon: float, days: int, vars: List[str]) -> pd.DataFrame:
-    endpoint = "https://api.open-meteo.com/v1/forecast"
-    params = {
-        "latitude": lat, "longitude": lon,
-        "hourly": ",".join(vars),
-        "timezone": "America/Sao_Paulo",
-        "forecast_days": days,
-    }
-    r = requests.get(endpoint, params=params, timeout=20)
-    r.raise_for_status()
-    data = r.json()
-    df = pd.DataFrame(data["hourly"])
-    df["time"] = pd.to_datetime(df["time"])
-    return df
+def fetch_forecast() -> pd.DataFrame:
+    # URL completa da API Open-Meteo, conforme solicitado
+    url = "https://api.open-meteo.com/v1/forecast?latitude=-29.8889&longitude=-50.2667&timezone=America%2FSao_Paulo&forecast_days=3&windspeed_unit=kmh&precipitation_unit=mm&hourly=temperature_2m,wind_speed_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,wind_direction_10m,wind_direction_80m,wind_direction_120m,wind_direction_180m,wind_gusts_10m,precipitation_probability,precipitation,rain&daily=sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant"
+    
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+
+        # Validação básica da resposta
+        if "hourly" not in data or "time" not in data["hourly"]:
+            st.error("Resposta da API inválida. Não foi possível encontrar dados horários.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data["hourly"])
+        
+        # Renomear colunas para corresponder ao resto do script
+        df.rename(columns={
+            "time": "time",
+            "wind_speed_10m": "windspeed_10m",
+            "wind_gusts_10m": "windgusts_10m",
+            "wind_direction_10m": "winddirection_10m"
+        }, inplace=True)
+
+        # Certificar que a coluna 'time' é do tipo datetime
+        df["time"] = pd.to_datetime(df["time"])
+        return df
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao buscar dados da API: {e}")
+        return pd.DataFrame()
+    except (KeyError, ValueError) as e:
+        st.error(f"Erro ao processar os dados recebidos da API: {e}")
+        return pd.DataFrame()
 
 def wind_dir_text(deg: float) -> Tuple[str, str]:
     # Retorna (seta_html, descrição)
@@ -105,17 +125,21 @@ def summarize(df: pd.DataFrame) -> Dict:
     return {"media": ws, "pico": gust, "hora_pico": hora_pico, "calmaria": calmaria}
 
 # ---------- Sidebar ----------
-with st.sidebar:
-    st.header("Configurações")
-    dias = st.slider("Dias de previsão", 1, 7, 2)
-    st.caption("Fonte: Open-Meteo • Sem chave • Cache 30 min")
+# Removido para simplificar a interface, conforme a imagem de referência
+# with st.sidebar:
+#     st.header("Configurações")
+#     dias = st.slider("Dias de previsão", 1, 7, 2)
+#     st.caption("Fonte: Open-Meteo • Sem chave • Cache 30 min")
 
 # ---------- Dados ----------
-LAT, LON = -29.885, -50.267
-VARS = ["windspeed_10m", "windgusts_10m", "winddirection_10m"]
+df = fetch_forecast()
 
-df = fetch_forecast(LAT, LON, dias=dias, vars=VARS)
-df["hora"] = df["time"].dt.strftime("%H:%M")
+# Adicionar verificação para DataFrame vazio
+if not df.empty:
+    df["hora"] = df["time"].dt.strftime("%H:%M")
+else:
+    st.warning("Não foi possível carregar os dados da previsão. Tente novamente mais tarde.")
+    st.stop()
 
 # ---------- Header ----------
 now_str = dt.datetime.now().strftime("%d/%m/%Y, %H:%M")
@@ -128,44 +152,48 @@ st.markdown(f"""
 
 # ---------- Cards superiores ----------
 s = summarize(df)
-col1 = st.container()
-with col1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="kpi">
-      <div class="icon">📈</div>
-      <div>
-        <div class="meta">Velocidade média (próx. 24h)</div>
-        <div style="font-size:2rem; font-weight:700;">{:.0f} km/h</div>
-      </div>
-    </div>
-    """.format(s["media"] if pd.notna(s["media"]) else 0), unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-colA, colB = st.columns(2)
-with colA:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+with st.container():
+    st.markdown('<div class="card kpi-card">', unsafe_allow_html=True)
+    # SVG para o ícone de velocidade
+    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-wind"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>'
     st.markdown(f"""
     <div class="kpi">
-      <div class="icon">🡱</div>
+      <div class="icon">{icon_svg}</div>
+      <div>
+        <div class="meta">Velocidade média (próx. 24h)</div>
+        <div style="font-size:2rem; font-weight:700;">{s['media']:.0f} <span style="font-size:1.2rem;font-weight:500;">km/h</span></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown("### Destaques das Próximas 24h")
+colA, colB = st.columns(2)
+with colA:
+    st.markdown('<div class="card highlight-card">', unsafe_allow_html=True)
+    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-up-circle"><circle cx="12" cy="12" r="10"></circle><polyline points="16 12 12 8 8 12"></polyline><line x1="12" y1="16" x2="12" y2="8"></line></svg>'
+    st.markdown(f"""
+    <div class="kpi">
+      <div class="icon" style="background:#fee2e2;">{icon_svg}</div>
       <div>
         <div class="meta">Pico de Vento</div>
-        <div style="font-size:1.6rem; font-weight:700;">{int(s["pico"]) if pd.notna(s["pico"]) else 0} km/h</div>
-        <div class="meta">previsto para ~ {s["hora_pico"]}</div>
+        <div style="font-size:1.5rem;font-weight:700;">{s['pico']:.0f} <span style="font-size:1rem;font-weight:500;">km/h</span></div>
+        <div class="meta">previsto para ~ {s['hora_pico']}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with colB:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    calm = "Sem previsão de calmaria." if not s["calmaria"] else "Calmaria prevista nas próximas 24h."
+    st.markdown('<div class="card highlight-card">', unsafe_allow_html=True)
+    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-down-circle"><circle cx="12" cy="12" r="10"></circle><polyline points="8 12 12 16 16 12"></polyline><line x1="12" y1="8" x2="12" y2="16"></line></svg>'
+    calm_text = "Sem previsão de calmaria." if not s['calmaria'] else "Calmaria prevista."
     st.markdown(f"""
     <div class="kpi">
-      <div class="icon">⤵️</div>
+      <div class="icon" style="background:#dbeafe;">{icon_svg}</div>
       <div>
         <div class="meta">Período de Calmaria</div>
-        <div>{calm}</div>
+        <div style="font-size:1.1rem;font-weight:500;height:48px;display:flex;align-items:center;">{calm_text}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -206,23 +234,19 @@ with c:
             st.experimental_rerun()
 
 # ---------- Status das fontes ----------
-st.markdown("### Status das Fontes de Dados")
-st.markdown('<div class="status-grid">', unsafe_allow_html=True)
-
-def status_card(titulo: str, itens: List[Tuple[str, bool]]):
-    st.markdown('<div class="status-item">', unsafe_allow_html=True)
-    st.markdown(f"**{titulo}**", unsafe_allow_html=True)
-    for nome, ok in itens:
-        dot = '<span class="dot ok"></span>' if ok else '<span class="dot down"></span>'
-        st.markdown(f"{dot} {nome} — {'Online' if ok else 'Offline'}", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-colL, colR = st.columns(2)
-with colL:
-    status_card("Lagoa dos Barros", [("Windguru", True)])
-with colR:
-    status_card("Osório", [("Windy", True), ("Windguru", True), ("Windfinder", True)])
-
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("### Status da Fonte de Dados")
+# A verificação 'df.empty' nos informa indiretamente o status da API
+status_ok = not df.empty
+st.markdown(
+    f"""
+    <div class="card">
+        <div class="status-item">
+            <span class="dot {'ok' if status_ok else 'down'}"></span>
+            Open-Meteo — {'Online' if status_ok else 'Offline'}
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.caption("Protótipo não oficial. Dados: Open-Meteo. Layout inspirado no painel solicitado.")

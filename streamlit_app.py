@@ -195,107 +195,116 @@ def create_wind_chart(df: pd.DataFrame) -> go.Figure:
     now = pd.Timestamp.now(tz="America/Sao_Paulo")
     future_72h = df[(df["time"] >= now) & (df["time"] < now + pd.Timedelta(hours=72))].copy()
 
+    if future_72h.empty:
+        return go.Figure()
+
     fig = go.Figure()
 
-    # Series
+    # Series de dados
     fig.add_trace(go.Scatter(
-        x=future_72h["time"],
-        y=future_72h["windspeed_10m"],
-        mode='lines+markers',
-        name='Vento Sustentado (km/h)',
-        line=dict(color='#2E86C1', width=2),
-        marker=dict(size=4, symbol='circle')
+        x=future_72h["time"], y=future_72h["windspeed_10m"],
+        mode='lines+markers', name='Vento Sustentado (km/h)',
+        line=dict(color='#2E86C1', width=2.5), marker=dict(symbol='circle', size=5)
     ))
     fig.add_trace(go.Scatter(
-        x=future_72h["time"],
-        y=future_72h["windgusts_10m"],
-        mode='lines+markers',
-        name='Rajadas (km/h)',
-        line=dict(color='#EB984E', width=2, dash='dash'),
-        marker=dict(size=4, symbol='triangle-up')
+        x=future_72h["time"], y=future_72h["windgusts_10m"],
+        mode='lines+markers', name='Rajadas (km/h)',
+        line=dict(color='#EB984E', width=2.5, dash='dash'), marker=dict(symbol='triangle-up', size=5)
     ))
 
-    # Layout e eixos
+    # Eixo Y
     max_val = max(future_72h["windspeed_10m"].max(), future_72h["windgusts_10m"].max())
-    y_max = (int(max_val / 5) + 1) * 5
+    y_max = (int(max_val / 5) + 1) * 5 if max_val > 0 else 5
 
-    fig.update_layout(
-        title="Vento – próximas 72h (Osório, RS)",
-        xaxis_title="",
-        yaxis_title="Velocidade (km/h)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor='white',
-        width=1200,
-        height=600,
-        margin=dict(l=50, r=50, t=90, b=50)
-    )
-
-    fig.update_xaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='#D6DBDF',
-        tickformat="%d/%m %Hh",
-        dtick=10800000  # 3 horas
-    )
-    fig.update_yaxes(
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='#D6DBDF',
-        range=[0, y_max],
-        dtick=5
-    )
-
-    # Shaded regions
-    fig.add_hrect(y0=0, y1=3, line_width=0, fillcolor="#E9F7EF", opacity=0.5, layer="below")
-    fig.add_hrect(y0=20, y1=y_max, line_width=0, fillcolor="#FDEDEC", opacity=0.5, layer="below")
-
-    # Eventos Chave
+    # Eventos Chave (10 mais severos)
     strong_winds = future_72h[(future_72h['windspeed_10m'] >= 20) | (future_72h['windgusts_10m'] >= 20)].copy()
     strong_winds['severity'] = strong_winds[['windspeed_10m', 'windgusts_10m']].max(axis=1)
 
     calm_periods = future_72h[future_72h['windspeed_10m'] < 3].copy()
-    calm_periods['severity'] = calm_periods['windspeed_10m'].min()
+    calm_periods['severity'] = calm_periods['windspeed_10m'] # Menor é mais "severo"
 
-    events = pd.concat([
-        strong_winds.sort_values(by='severity', ascending=False),
-        calm_periods.sort_values(by='severity', ascending=True)
-    ]).drop_duplicates(subset=['time'])
+    # Ordenar por severidade e pegar os 10 mais relevantes
+    top_strong = strong_winds.sort_values(by='severity', ascending=False)
+    top_calm = calm_periods.sort_values(by='severity', ascending=True)
 
-    key_events = events.head(10)
+    # Combinar e garantir que não tenhamos mais de 10 eventos no total
+    key_events = pd.concat([top_strong, top_calm]).sort_values(by='severity', ascending=False).head(10)
 
-    tickvals = list(fig.layout.xaxis.tickvals or [])
-    ticktext = list(fig.layout.xaxis.ticktext or [])
+    # Eixo X: Ticks a cada 3 horas e ticks de eventos
+    tickvals = pd.date_range(start=future_72h['time'].min().ceil('3H'), end=future_72h['time'].max(), freq='3H')
+    ticktext = [t.strftime('%d/%m %Hh') for t in tickvals]
 
+    event_times = key_events['time'].tolist()
+    final_tickvals = sorted(list(set(tickvals.to_list() + event_times)))
+    final_ticktext = []
+    for t in final_tickvals:
+        if t in event_times:
+            final_ticktext.append(f"<b>{t.strftime('%d/%m %H:%M')}</b>")
+        elif t in tickvals:
+            final_ticktext.append(t.strftime('%d/%m %Hh'))
+        else: # Caso raro de sobreposição, prioriza evento
+            final_ticktext.append(f"<b>{t.strftime('%d/%m %H:%M')}</b>")
+
+
+    fig.update_layout(
+        title="Vento – próximas 72h (Osório, RS)",
+        xaxis_title=None, yaxis_title="Velocidade (km/h)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        plot_bgcolor='white', width=1200, height=600,
+        margin=dict(l=60, r=40, t=100, b=80),
+        xaxis=dict(
+            showgrid=True, gridwidth=1, gridcolor='#E5E7E9',
+            tickvals=final_tickvals,
+            ticktext=final_ticktext,
+            tickangle=45,
+        ),
+        yaxis=dict(
+            range=[0, y_max], dtick=5,
+            showgrid=True, gridwidth=1, gridcolor='#D6DBDF',
+        )
+    )
+
+    # Zonas sombreadas
+    fig.add_hrect(y0=0, y1=3, fillcolor="#E9F7EF", opacity=0.6, layer="below", line_width=0)
+    fig.add_hrect(y0=20, y1=y_max, fillcolor="#FDEDEC", opacity=0.6, layer="below", line_width=0)
+
+    # Linhas de grade e eventos
+    for t in tickvals:
+        fig.add_vline(x=t, line_width=1, line_color='#E5E7E9', layer="below")
+
+    # Linha separadora de dias (mais espessa)
+    start_day = future_72h['time'].min().normalize() + pd.Timedelta(days=1)
+    for i in range(4): # Max de 4 dias
+        day_break = start_day + pd.Timedelta(days=i)
+        if day_break < future_72h['time'].max():
+            fig.add_vline(x=day_break, line_width=3, line_color='#566573', layer="below")
+
+    # Linhas e anotações para eventos chave
     for _, event in key_events.iterrows():
-        fig.add_vline(
-            x=event['time'],
-            line_width=2,
-            line_dash="dash",
-            line_color="#5D6D7E",
-            layer="below"
-        )
-        is_strong = event['windspeed_10m'] >= 20 or event['windgusts_10m'] >= 20
-        annotation_text = "Forte" if is_strong else "Calmaria"
+        is_strong = event['severity'] >= 20
+        color = "#E74C3C" if is_strong else "#2ECC71"
 
+        # Adiciona uma linha vertical dedicada para o evento
+        fig.add_vline(x=event['time'], line_width=2, line_dash="dot", line_color="#5D6D7E", layer="below")
+
+        # Garante que o rótulo do evento apareça no eixo X
+        if event['time'] not in final_tickvals:
+            final_tickvals.append(event['time'])
+            final_ticktext.append(f"<b>{event['time'].strftime('%d/%m %H:%M')}</b>")
+
+        y_pos = max(event['windspeed_10m'], event['windgusts_10m'])
         fig.add_annotation(
-            x=event['time'],
-            y=max(event['windspeed_10m'], event['windgusts_10m']) + 2,
-            text=annotation_text,
-            showarrow=False,
-            bgcolor="#ffffff",
-            bordercolor="#5D6D7E",
-            borderwidth=1,
-            font=dict(size=10)
+            x=event['time'], y=y_pos + (y_max * 0.05),
+            text="Forte" if is_strong else "Calmaria",
+            showarrow=False, font=dict(size=11, color="white"),
+            bgcolor=color, borderpad=4, border_radius=4
         )
-        tickvals.append(event['time'])
-        ticktext.append(event['time'].strftime('%d/%m %H:%M'))
-
-    # Linhas de grade diárias
-    days = future_72h['time'].dt.normalize().unique()
-    for day in days:
-        fig.add_vline(x=day, line_width=1.5, line_color="#34495E", layer="below")
-
-    fig.update_layout(xaxis=dict(tickvals=tickvals, ticktext=ticktext))
+        # Marcador extra no ponto exato do evento
+        fig.add_trace(go.Scatter(
+            x=[event['time']], y=[y_pos], mode='markers',
+            marker=dict(color=color, size=12, symbol='star-diamond', line=dict(color='white', width=2)),
+            showlegend=False
+        ))
 
     return fig
 
@@ -388,7 +397,12 @@ st.markdown('<h2 class="section-header">Previsão Detalhada por Hora</h2>', unsa
 icon_nav = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>'
 
 # Paginação
-if "rows" not in st.session_state:
+if "rows" in st.query_params:
+    try:
+        st.session_state.rows = int(st.query_params["rows"])
+    except (ValueError, TypeError):
+        st.session_state.rows = 8
+elif "rows" not in st.session_state:
     st.session_state.rows = 8
 
 # Renderizar linhas da tabela
@@ -425,18 +439,31 @@ for _, r in future_df.head(st.session_state.rows).iterrows():
         </div>
     </div>
     """
+# Botão "Carregar mais" como um link com query parameters
+if st.session_state.rows < len(future_df):
+    new_rows = st.session_state.rows + 8
+    button_html = f"""
+    <div style="text-align: center; padding: 20px 0 10px 0; border-top: 1px solid var(--border);">
+        <a href="?rows={new_rows}" target="_self" style="
+            display: inline-block;
+            padding: 0.5rem 1.5rem;
+            background-color: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.2s, border-color 0.2s;
+        ">
+            Carregar mais
+        </a>
+    </div>
+    """
+    table_html += button_html
 
-table_html += '</div>'
+table_html += '</div>' # Fecha o .card
 
 st.markdown(table_html, unsafe_allow_html=True)
-
-# Botão Carregar Mais
-if st.session_state.rows < len(future_df):
-    st.markdown('<div style="text-align:center; padding-top:16px;">', unsafe_allow_html=True)
-    if st.button("Carregar mais"):
-        st.session_state.rows += 8
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------- Status das fontes ----------

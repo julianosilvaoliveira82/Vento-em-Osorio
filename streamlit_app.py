@@ -293,6 +293,11 @@ def create_wind_chart(df: pd.DataFrame) -> go.Figure:
             final_ticktext.append(f"<b>{event['time'].strftime('%d/%m %H:%M')}</b>")
 
         y_pos = max(event['windspeed_10m'], event['windgusts_10m'])
+
+        # Pula a anotação se os dados forem inválidos (NaN)
+        if pd.isna(y_pos):
+            continue
+
         fig.add_annotation(
             x=event['time'], y=y_pos + (y_max * 0.05),
             text="Forte" if is_strong else "Calmaria",

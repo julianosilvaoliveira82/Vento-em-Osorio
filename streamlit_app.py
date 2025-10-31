@@ -1,3 +1,4 @@
+import base64
 import datetime as dt
 from typing import Dict, List, Tuple
 
@@ -6,7 +7,17 @@ import requests
 import streamlit as st
 
 # ---------- Config da página ----------
-st.set_page_config(page_title="Vento em Osório, RS", page_icon="💨", layout="wide")
+FAVICON_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.59 4.59A2 2 0 1 1 11 8H2" />
+    <path d="M12.59 19.41A2 2 0 1 0 14 16H2" />
+    <path d="M2 12h17.59a2 2 0 1 0 0-4H12" />
+</svg>
+"""
+FAVICON_B64 = base64.b64encode(FAVICON_SVG.encode("utf-8")).decode("utf-8")
+FAVICON_URI = f"data:image/svg+xml;base64,{FAVICON_B64}"
+
+st.set_page_config(page_title="Vento em Osório, RS", page_icon=FAVICON_URI, layout="wide")
 
 # ---------- Estilos ----------
 CARD_CSS = """
@@ -19,7 +30,13 @@ CARD_CSS = """
     --border: #e2e8f0;
 }
 body { background-color: var(--bg); }
-.block-container { padding: 1.5rem 2rem; }
+/* Center the main content area and give it a max-width for better readability on large screens. */
+.block-container {
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 1.5rem 2rem;
+}
 .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -173,13 +190,6 @@ def summarize(df: pd.DataFrame) -> Dict:
         "calmaria": calmaria
     }
 
-# ---------- Sidebar ----------
-# Removido para simplificar a interface, conforme a imagem de referência
-# with st.sidebar:
-#     st.header("Configurações")
-#     dias = st.slider("Dias de previsão", 1, 7, 2)
-#     st.caption("Fonte: Open-Meteo • Sem chave • Cache 30 min")
-
 # ---------- Dados ----------
 df = fetch_forecast()
 
@@ -329,5 +339,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-st.caption("Protótipo não oficial. Dados: Open-Meteo. Layout inspirado no painel solicitado.")

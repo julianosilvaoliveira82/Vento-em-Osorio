@@ -213,7 +213,8 @@ def create_wind_chart(df: pd.DataFrame) -> go.Figure:
     ))
 
     # Eixo Y
-    max_val = max(future_72h["windspeed_10m"].max(), future_72h["windgusts_10m"].max())
+    all_winds = pd.concat([future_72h["windspeed_10m"], future_72h["windgusts_10m"]]).dropna()
+    max_val = all_winds.max() if not all_winds.empty else 0
     y_max = (int(max_val / 5) + 1) * 5 if max_val > 0 else 5
 
     # Eventos Chave (10 mais severos)
@@ -287,29 +288,30 @@ def create_wind_chart(df: pd.DataFrame) -> go.Figure:
         # Adiciona uma linha vertical dedicada para o evento
         fig.add_vline(x=event['time'], line_width=2, line_dash="dot", line_color="#5D6D7E", layer="below")
 
-        # Garante que o rótulo do evento apareça no eixo X
-        if event['time'] not in final_tickvals:
-            final_tickvals.append(event['time'])
-            final_ticktext.append(f"<b>{event['time'].strftime('%d/%m %H:%M')}</b>")
+        ws = event['windspeed_10m']
+        wg = event['windgusts_10m']
 
-        y_pos = max(event['windspeed_10m'], event['windgusts_10m'])
+        # A anotação só é criada se houver dados válidos
+        if pd.notna(ws) or pd.notna(wg):
+            y_pos = max(ws if pd.notna(ws) else 0, wg if pd.notna(wg) else 0)
 
-        # Pula a anotação se os dados forem inválidos (NaN)
-        if pd.isna(y_pos):
-            continue
+            # Garante que o rótulo do evento apareça no eixo X
+            if event['time'] not in final_tickvals:
+                final_tickvals.append(event['time'])
+                final_ticktext.append(f"<b>{event['time'].strftime('%d/%m %H:%M')}</b>")
 
-        fig.add_annotation(
-            x=event['time'], y=y_pos + (y_max * 0.05),
-            text="Forte" if is_strong else "Calmaria",
-            showarrow=False, font=dict(size=11, color="white"),
-            bgcolor=color, borderpad=4, border_radius=4
-        )
-        # Marcador extra no ponto exato do evento
-        fig.add_trace(go.Scatter(
-            x=[event['time']], y=[y_pos], mode='markers',
-            marker=dict(color=color, size=12, symbol='star-diamond', line=dict(color='white', width=2)),
-            showlegend=False
-        ))
+            fig.add_annotation(
+                x=event['time'], y=y_pos + (y_max * 0.05),
+                text="Forte" if is_strong else "Calmaria",
+                showarrow=False, font=dict(size=11, color="white"),
+                bgcolor=color, borderpad=4, border_radius=4
+            )
+            # Marcador extra no ponto exato do evento
+            fig.add_trace(go.Scatter(
+                x=[event['time']], y=[y_pos], mode='markers',
+                marker=dict(color=color, size=12, symbol='star-diamond', line=dict(color='white', width=2)),
+                showlegend=False
+            ))
 
     return fig
 

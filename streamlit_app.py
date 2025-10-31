@@ -117,12 +117,28 @@ def wind_dir_text(deg: float) -> Tuple[str, str]:
 def summarize(df: pd.DataFrame) -> Dict:
     now = pd.Timestamp.now(tz="America/Sao_Paulo")
     prox24 = df[(df["time"] >= now) & (df["time"] < now + pd.Timedelta(hours=24))].copy()
-    ws = prox24["windspeed_10m"].mean() if "windspeed_10m" in prox24 else float("nan")
-    gust = prox24["windgusts_10m"].max() if "windgusts_10m" in prox24 else float("nan")
-    idx_max = prox24["windgusts_10m"].idxmax() if "windgusts_10m" in prox24 else None
-    hora_pico = prox24.loc[idx_max, "time"].strftime("%H:%M") if idx_max is not None else "—"
-    calmaria = prox24["windspeed_10m"].min() < 3 if "windspeed_10m" in prox24 else False
-    return {"media": ws, "pico": gust, "hora_pico": hora_pico, "calmaria": calmaria}
+
+    if prox24.empty:
+        return {"media": 0, "pico": 0, "hora_pico": "—", "calmaria": True}
+
+    ws = prox24["windspeed_10m"].mean()
+    gust = prox24["windgusts_10m"].max()
+
+    # Adicionar verificação para evitar erro com idxmax em séries vazias ou com NaNs
+    if not prox24["windgusts_10m"].empty and prox24["windgusts_10m"].notna().any():
+        idx_max = prox24["windgusts_10m"].idxmax()
+        hora_pico = prox24.loc[idx_max, "time"].strftime("%H:%M")
+    else:
+        hora_pico = "—"
+
+    calmaria = prox24["windspeed_10m"].min() < 3
+
+    return {
+        "media": ws if pd.notna(ws) else 0,
+        "pico": gust if pd.notna(gust) else 0,
+        "hora_pico": hora_pico,
+        "calmaria": calmaria
+    }
 
 # ---------- Sidebar ----------
 # Removido para simplificar a interface, conforme a imagem de referência
@@ -143,110 +159,162 @@ else:
 
 # ---------- Header ----------
 now_str = dt.datetime.now().strftime("%d/%m/%Y, %H:%M")
+icon_wind = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-wind"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>'
+icon_refresh = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-refresh-cw"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L20.49 2M3.51 22a9 9 0 0 1-2.85-11.88"></path></svg>'
+
 st.markdown(f"""
 <div class="header">
-  <h2 style="margin:0;">Vento em Osório, RS</h2>
-  <span class="badge">Atualizado em: {now_str}</span>
+    <div style="display:flex; align-items:center; gap:12px;">
+        <div style="color:#2563eb;">{icon_wind}</div>
+        <div>
+            <h1 style="font-size:1.25rem; font-weight:700; color:#1e293b; margin:0;">Vento em Osório, RS</h1>
+            <p style="font-size:0.75rem; color:#64748b; margin:0;">Atualizado em: {now_str}</p>
+        </div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ---------- Cards superiores ----------
 s = summarize(df)
-with st.container():
-    st.markdown('<div class="card kpi-card">', unsafe_allow_html=True)
-    # SVG para o ícone de velocidade
-    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-wind"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>'
-    st.markdown(f"""
-    <div class="kpi">
-      <div class="icon">{icon_svg}</div>
-      <div>
-        <div class="meta">Velocidade média (próx. 24h)</div>
-        <div style="font-size:2rem; font-weight:700;">{s['media']:.0f} <span style="font-size:1.2rem;font-weight:500;">km/h</span></div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+icon_trending_up = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trending-up"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>'
+icon_chevrons_up = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevrons-up"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>'
+icon_chevrons_down = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevrons-down"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>'
 
-st.markdown("### Destaques das Próximas 24h")
+# Card de Velocidade Média
+st.markdown(f"""
+<div class="card">
+    <div class="kpi">
+        <div class="icon" style="background:#dbeafe; color:#2563eb;">{icon_trending_up}</div>
+        <div>
+            <div class="meta">Velocidade média (próx. 24h)</div>
+            <div style="font-size:1.875rem; font-weight:700; color:#1e293b;">
+                {s['media']:.0f} <span style="font-size:1rem; font-weight:500; color:#64748b;">km/h</span>
+            </div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown('<h2 class="section-header">Destaques das Próximas 24h</h2>', unsafe_allow_html=True)
 colA, colB = st.columns(2)
 with colA:
-    st.markdown('<div class="card highlight-card">', unsafe_allow_html=True)
-    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-up-circle"><circle cx="12" cy="12" r="10"></circle><polyline points="16 12 12 8 8 12"></polyline><line x1="12" y1="16" x2="12" y2="8"></line></svg>'
     st.markdown(f"""
-    <div class="kpi">
-      <div class="icon" style="background:#fee2e2;">{icon_svg}</div>
-      <div>
-        <div class="meta">Pico de Vento</div>
-        <div style="font-size:1.5rem;font-weight:700;">{s['pico']:.0f} <span style="font-size:1rem;font-weight:500;">km/h</span></div>
-        <div class="meta">previsto para ~ {s['hora_pico']}</div>
-      </div>
+    <div class="card">
+        <div class="kpi">
+            <div class="icon" style="background:#fee2e2; color:#dc2626;">{icon_chevrons_up}</div>
+            <div>
+                <div class="meta">Pico de Vento</div>
+                <div style="font-size:1.5rem; font-weight:700; color:#1e293b;">
+                    {s['pico']:.0f} <span style="font-size:0.875rem; font-weight:500; color:#64748b;">km/h</span>
+                </div>
+                <div class="meta">previsto para ~ {s['hora_pico']}</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with colB:
-    st.markdown('<div class="card highlight-card">', unsafe_allow_html=True)
-    icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-down-circle"><circle cx="12" cy="12" r="10"></circle><polyline points="8 12 12 16 16 12"></polyline><line x1="12" y1="8" x2="12" y2="16"></line></svg>'
     calm_text = "Sem previsão de calmaria." if not s['calmaria'] else "Calmaria prevista."
     st.markdown(f"""
-    <div class="kpi">
-      <div class="icon" style="background:#dbeafe;">{icon_svg}</div>
-      <div>
-        <div class="meta">Período de Calmaria</div>
-        <div style="font-size:1.1rem;font-weight:500;height:48px;display:flex;align-items:center;">{calm_text}</div>
-      </div>
+    <div class="card">
+        <div class="kpi">
+            <div class="icon" style="background:#d1fae5; color:#059669;">{icon_chevrons_down}</div>
+            <div>
+                <div class="meta">Período de Calmaria</div>
+                <div style="font-size:1rem; font-weight:600; color:#1e293b; height: 52px; display:flex; align-items:center;">{calm_text}</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Tabela detalhada ----------
-st.markdown("### Previsão Detalhada por Hora")
-st.markdown('<div class="card table-card">', unsafe_allow_html=True)
-st.markdown('<div class="header-row"><div>HORA</div><div>VENTO (KM/H)</div><div>DIREÇÃO</div></div>', unsafe_allow_html=True)
+st.markdown('<h2 class="section-header">Previsão Detalhada por Hora</h2>', unsafe_allow_html=True)
+st.markdown('<div class="card">', unsafe_allow_html=True)
 
-# paginação "Carregar mais"
+icon_nav = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>'
+
+# Cabeçalho da tabela
+st.markdown("""
+<div class="table-header">
+    <div class="col">HORA</div>
+    <div class="col">VENTO (KM/H)</div>
+    <div class="col">DIREÇÃO</div>
+</div>
+""", unsafe_allow_html=True)
+
+# Paginação
 if "rows" not in st.session_state:
     st.session_state.rows = 8
 
-def render_rows(_df: pd.DataFrame, limit: int):
-    show = _df.head(limit).copy()
-    for _, r in show.iterrows():
-        gust = int(r["windgusts_10m"]) if pd.notna(r["windgusts_10m"]) else 0
-        ws = int(r["windspeed_10m"]) if pd.notna(r["windspeed_10m"]) else 0
-        arrow, desc = wind_dir_text(float(r["winddirection_10m"]) if pd.notna(r["winddirection_10m"]) else 0.0)
-        html = f"""
-        <div class="row">
-          <div>{r['hora']}</div>
-          <div>{ws} <span class="meta">Raj {gust}</span></div>
-          <div class="dir">{arrow} {desc}</div>
+# Renderizar linhas da tabela
+now = pd.Timestamp.now(tz="America/Sao_Paulo").floor('h')
+future_df = df[df["time"] >= now]
+
+for _, r in future_df.head(st.session_state.rows).iterrows():
+    gust = int(r["windgusts_10m"])
+    ws = int(r["windspeed_10m"])
+    arrow_style = f"transform:rotate({int(r['winddirection_10m'])}deg);"
+    _, desc = wind_dir_text(float(r["winddirection_10m"]))
+
+    st.markdown(f"""
+    <div class="table-row">
+        <div class="col font-semibold">{r['hora']}</div>
+        <div class="col">
+            <div class="wind-speed">{ws}</div>
+            <div class="gust-speed">Raj {gust}</div>
         </div>
-        """
-        st.markdown(html, unsafe_allow_html=True)
-
-render_rows(df, st.session_state.rows)
-st.markdown('</div>', unsafe_allow_html=True)
-
-c = st.container()
-with c:
-    if st.session_state.rows < len(df):
-        if st.button("Carregar mais"):
-            st.session_state.rows += 8
-            st.experimental_rerun()
-
-# ---------- Status das fontes ----------
-st.markdown("### Status da Fonte de Dados")
-# A verificação 'df.empty' nos informa indiretamente o status da API
-status_ok = not df.empty
-st.markdown(
-    f"""
-    <div class="card">
-        <div class="status-item">
-            <span class="dot {'ok' if status_ok else 'down'}"></span>
-            Open-Meteo — {'Online' if status_ok else 'Offline'}
+        <div class="col direction">
+            <div class="direction-icon" style="{arrow_style}">{icon_nav}</div>
+            <span class="direction-text">{desc}</span>
         </div>
     </div>
-    """,
-    unsafe_allow_html=True
-)
+    """, unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Botão Carregar Mais
+if st.session_state.rows < len(future_df):
+    st.markdown('<div style="text-align:center; margin-top:16px;">', unsafe_allow_html=True)
+    if st.button("Carregar mais"):
+        st.session_state.rows += 8
+        st.experimental_rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ---------- Status das fontes ----------
+if 'show_sources' not in st.session_state:
+    st.session_state.show_sources = False
+
+def toggle_sources():
+    st.session_state.show_sources = not st.session_state.show_sources
+
+icon_chevron = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-down"><polyline points="6 9 12 15 18 9"></polyline></svg>'
+rotation_style = "transform: rotate(180deg);" if st.session_state.show_sources else ""
+
+st.markdown(f"""
+<div class="card" style="margin-top:24px;">
+    <div class="sources-header" onclick="toggle_sources()">
+        <h2 class="section-header" style="margin:0;">Status das Fontes de Dados</h2>
+        <div style="transition:transform 0.2s; {rotation_style}">{icon_chevron}</div>
+    </div>
+""", unsafe_allow_html=True)
+
+if st.session_state.show_sources:
+    status_ok = not df.empty
+    st.markdown(f"""
+    <div class="sources-content">
+        <div class="source-card">
+            <h4>Osório</h4>
+            <div class="source-item">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="dot {'ok' if status_ok else 'down'}"></div>
+                    <span>Open-Meteo</span>
+                </div>
+                <span class="status-text {'ok' if status_ok else 'down'}">{'Online' if status_ok else 'Offline'}</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.caption("Protótipo não oficial. Dados: Open-Meteo. Layout inspirado no painel solicitado.")

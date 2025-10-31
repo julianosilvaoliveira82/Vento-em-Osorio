@@ -11,47 +11,80 @@ st.set_page_config(page_title="Vento em Osório, RS", page_icon="💨", layout="
 # ---------- Estilos ----------
 CARD_CSS = """
 <style>
-:root{
-  --bg:#f7f9fc;
-  --card:#ffffff;
-  --muted:#94a3b8;
-  --ok:#10b981;
-  --warn:#ef4444;
-  --primary:#1e3a5f;
+:root {
+    --bg: #f0f2f6;
+    --card: #ffffff;
+    --muted: #64748b;
+    --text: #1e293b;
+    --border: #e2e8f0;
 }
-.block-container{padding-top:1.2rem;}
-.header{
-  display:flex; align-items:center; gap:10px; margin-bottom:12px;
+body { background-color: var(--bg); }
+.block-container { padding: 1.5rem 2rem; }
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
 }
-.badge{font-size:.75rem; color:var(--muted);}
-.card{
-  background:var(--card); border:1px solid #e5e7eb; border-radius:14px;
-  padding:18px; box-shadow:0 1px 2px rgba(16,24,40,.06);
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
 }
-.kpi{display:flex; align-items:center; gap:12px;}
-.kpi .icon{
-  width:40px; height:40px; border-radius:10px; background:#eef2ff;
-  display:flex; align-items:center; justify-content:center; font-size:18px;
+.kpi {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
-.grid{display:grid; gap:12px;}
-.grid.cols-2{grid-template-columns:1fr 1fr;}
-.grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
-.meta{font-size:0.78rem; color:var(--muted);}
-.table-card .header-row{
-  display:grid; grid-template-columns:120px 1fr 1fr; padding:12px 16px; color:#64748b; font-size:.85rem;
-  border-bottom:1px solid #e5e7eb;
+.kpi .icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.row{
-  display:grid; grid-template-columns:120px 1fr 1fr; padding:12px 16px; align-items:center;
-  border-bottom:1px solid #f1f5f9;
+.meta {
+    font-size: 0.875rem;
+    color: var(--muted);
 }
-.dir{display:flex; align-items:center; gap:8px; color:#334155;}
-.arrow{display:inline-block; transform: rotate(0deg);}
-.status-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-.status-item{background:var(--card); border:1px solid #e5e7eb; border-radius:14px; padding:14px;}
-.dot{width:8px; height:8px; border-radius:8px; display:inline-block; margin-right:6px;}
-.dot.ok{background:var(--ok);} .dot.down{background:var(--warn);}
-.btn{display:flex; justify-content:center; margin-top:12px;}
+.section-header {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 24px;
+    margin-bottom: 16px;
+}
+.table-header, .table-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+}
+.table-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+.table-row:last-child { border-bottom: none; }
+.wind-speed { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+.gust-speed { font-size: 0.75rem; color: var(--muted); }
+.direction { display: flex; align-items: center; gap: 8px; }
+.direction-icon { color: #3b82f6; }
+.direction-text { font-size: 0.875rem; color: var(--text); }
+.sources-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+.sources-content { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+.source-card { background: #f8fafc; border-radius: 8px; padding: 16px; }
+.source-card h4 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; }
+.source-item { display: flex; justify-content: space-between; align-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.ok { background-color: #22c55e; }
+.dot.down { background-color: #ef4444; }
+.status-text.ok { color: #16a34a; }
+.status-text.down { color: #dc2626; }
 </style>
 """
 st.markdown(CARD_CSS, unsafe_allow_html=True)
@@ -159,16 +192,15 @@ else:
 
 # ---------- Header ----------
 now_str = dt.datetime.now().strftime("%d/%m/%Y, %H:%M")
-icon_wind = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-wind"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>'
-icon_refresh = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-refresh-cw"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L20.49 2M3.51 22a9 9 0 0 1-2.85-11.88"></path></svg>'
+icon_wind = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-wind"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>'
 
 st.markdown(f"""
 <div class="header">
     <div style="display:flex; align-items:center; gap:12px;">
-        <div style="color:#2563eb;">{icon_wind}</div>
+        <div style="color:#0284c7;">{icon_wind}</div>
         <div>
-            <h1 style="font-size:1.25rem; font-weight:700; color:#1e293b; margin:0;">Vento em Osório, RS</h1>
-            <p style="font-size:0.75rem; color:#64748b; margin:0;">Atualizado em: {now_str}</p>
+            <h1 style="font-size:1.5rem; font-weight:700; color:var(--text); margin:0;">Vento em Osório, RS</h1>
+            <p style="font-size:0.875rem; color:var(--muted); margin:0;">Atualizado em: {now_str}</p>
         </div>
     </div>
 </div>
@@ -180,15 +212,14 @@ icon_trending_up = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="2
 icon_chevrons_up = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevrons-up"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>'
 icon_chevrons_down = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevrons-down"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>'
 
-# Card de Velocidade Média
 st.markdown(f"""
 <div class="card">
     <div class="kpi">
-        <div class="icon" style="background:#dbeafe; color:#2563eb;">{icon_trending_up}</div>
+        <div class="icon" style="background:#e0f2fe; color:#0ea5e9;">{icon_trending_up}</div>
         <div>
             <div class="meta">Velocidade média (próx. 24h)</div>
-            <div style="font-size:1.875rem; font-weight:700; color:#1e293b;">
-                {s['media']:.0f} <span style="font-size:1rem; font-weight:500; color:#64748b;">km/h</span>
+            <div style="font-size:2.25rem; font-weight:700; color:var(--text);">
+                {s['media']:.0f} <span style="font-size:1.25rem; font-weight:500; color:var(--muted);">km/h</span>
             </div>
         </div>
     </div>
@@ -201,11 +232,11 @@ with colA:
     st.markdown(f"""
     <div class="card">
         <div class="kpi">
-            <div class="icon" style="background:#fee2e2; color:#dc2626;">{icon_chevrons_up}</div>
+            <div class="icon" style="background:#fee2e2; color:#ef4444;">{icon_chevrons_up}</div>
             <div>
                 <div class="meta">Pico de Vento</div>
-                <div style="font-size:1.5rem; font-weight:700; color:#1e293b;">
-                    {s['pico']:.0f} <span style="font-size:0.875rem; font-weight:500; color:#64748b;">km/h</span>
+                <div style="font-size:1.875rem; font-weight:700; color:var(--text);">
+                    {s['pico']:.0f} <span style="font-size:1rem; font-weight:500; color:var(--muted);">km/h</span>
                 </div>
                 <div class="meta">previsto para ~ {s['hora_pico']}</div>
             </div>
@@ -214,14 +245,14 @@ with colA:
     """, unsafe_allow_html=True)
 
 with colB:
-    calm_text = "Sem previsão de calmaria." if not s['calmaria'] else "Calmaria prevista."
+    calm_text = "Sem previsão de calmaria."
     st.markdown(f"""
     <div class="card">
         <div class="kpi">
-            <div class="icon" style="background:#d1fae5; color:#059669;">{icon_chevrons_down}</div>
+            <div class="icon" style="background:#dcfce7; color:#22c55e;">{icon_chevrons_down}</div>
             <div>
                 <div class="meta">Período de Calmaria</div>
-                <div style="font-size:1rem; font-weight:600; color:#1e293b; height: 52px; display:flex; align-items:center;">{calm_text}</div>
+                <div style="font-size:1.125rem; font-weight:600; color:var(--text); height: 60px; display:flex; align-items:center;">{calm_text}</div>
             </div>
         </div>
     </div>
@@ -274,47 +305,29 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Botão Carregar Mais
 if st.session_state.rows < len(future_df):
-    st.markdown('<div style="text-align:center; margin-top:16px;">', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; padding-top:16px;">', unsafe_allow_html=True)
     if st.button("Carregar mais"):
         st.session_state.rows += 8
-        st.experimental_rerun()
+        st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------- Status das fontes ----------
-if 'show_sources' not in st.session_state:
-    st.session_state.show_sources = False
-
-def toggle_sources():
-    st.session_state.show_sources = not st.session_state.show_sources
-
-icon_chevron = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-down"><polyline points="6 9 12 15 18 9"></polyline></svg>'
-rotation_style = "transform: rotate(180deg);" if st.session_state.show_sources else ""
-
-st.markdown(f"""
-<div class="card" style="margin-top:24px;">
-    <div class="sources-header" onclick="toggle_sources()">
-        <h2 class="section-header" style="margin:0;">Status das Fontes de Dados</h2>
-        <div style="transition:transform 0.2s; {rotation_style}">{icon_chevron}</div>
-    </div>
-""", unsafe_allow_html=True)
-
-if st.session_state.show_sources:
-    status_ok = not df.empty
-    st.markdown(f"""
-    <div class="sources-content">
-        <div class="source-card">
-            <h4>Osório</h4>
-            <div class="source-item">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <div class="dot {'ok' if status_ok else 'down'}"></div>
-                    <span>Open-Meteo</span>
-                </div>
-                <span class="status-text {'ok' if status_ok else 'down'}">{'Online' if status_ok else 'Offline'}</span>
+st.markdown('<h2 class="section-header">Status das Fontes de Dados</h2>', unsafe_allow_html=True)
+status_ok = not df.empty
+st.markdown(
+    f"""
+    <div class="card">
+        <div class="source-item">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div class="dot {'ok' if status_ok else 'down'}"></div>
+                <span>Open-Meteo</span>
             </div>
+            <span class="status-text {'ok' if status_ok else 'down'}">{'Online' if status_ok else 'Offline'}</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
 st.caption("Protótipo não oficial. Dados: Open-Meteo. Layout inspirado no painel solicitado.")

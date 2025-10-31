@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import requests
 import streamlit as st
+import plotly.graph_objects as go
 
 # ---------- Config da página ----------
 FAVICON_SVG = """
@@ -190,6 +191,114 @@ def summarize(df: pd.DataFrame) -> Dict:
         "calmaria": calmaria
     }
 
+def create_wind_chart(df: pd.DataFrame) -> go.Figure:
+    now = pd.Timestamp.now(tz="America/Sao_Paulo")
+    future_72h = df[(df["time"] >= now) & (df["time"] < now + pd.Timedelta(hours=72))].copy()
+
+    fig = go.Figure()
+
+    # Series
+    fig.add_trace(go.Scatter(
+        x=future_72h["time"],
+        y=future_72h["windspeed_10m"],
+        mode='lines+markers',
+        name='Vento Sustentado (km/h)',
+        line=dict(color='#2E86C1', width=2),
+        marker=dict(size=4, symbol='circle')
+    ))
+    fig.add_trace(go.Scatter(
+        x=future_72h["time"],
+        y=future_72h["windgusts_10m"],
+        mode='lines+markers',
+        name='Rajadas (km/h)',
+        line=dict(color='#EB984E', width=2, dash='dash'),
+        marker=dict(size=4, symbol='triangle-up')
+    ))
+
+    # Layout e eixos
+    max_val = max(future_72h["windspeed_10m"].max(), future_72h["windgusts_10m"].max())
+    y_max = (int(max_val / 5) + 1) * 5
+
+    fig.update_layout(
+        title="Vento – próximas 72h (Osório, RS)",
+        xaxis_title="",
+        yaxis_title="Velocidade (km/h)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        plot_bgcolor='white',
+        width=1200,
+        height=600,
+        margin=dict(l=50, r=50, t=90, b=50)
+    )
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='#D6DBDF',
+        tickformat="%d/%m %Hh",
+        dtick=10800000  # 3 horas
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='#D6DBDF',
+        range=[0, y_max],
+        dtick=5
+    )
+
+    # Shaded regions
+    fig.add_hrect(y0=0, y1=3, line_width=0, fillcolor="#E9F7EF", opacity=0.5, layer="below")
+    fig.add_hrect(y0=20, y1=y_max, line_width=0, fillcolor="#FDEDEC", opacity=0.5, layer="below")
+
+    # Eventos Chave
+    strong_winds = future_72h[(future_72h['windspeed_10m'] >= 20) | (future_72h['windgusts_10m'] >= 20)].copy()
+    strong_winds['severity'] = strong_winds[['windspeed_10m', 'windgusts_10m']].max(axis=1)
+
+    calm_periods = future_72h[future_72h['windspeed_10m'] < 3].copy()
+    calm_periods['severity'] = calm_periods['windspeed_10m'].min()
+
+    events = pd.concat([
+        strong_winds.sort_values(by='severity', ascending=False),
+        calm_periods.sort_values(by='severity', ascending=True)
+    ]).drop_duplicates(subset=['time'])
+
+    key_events = events.head(10)
+
+    tickvals = list(fig.layout.xaxis.tickvals or [])
+    ticktext = list(fig.layout.xaxis.ticktext or [])
+
+    for _, event in key_events.iterrows():
+        fig.add_vline(
+            x=event['time'],
+            line_width=2,
+            line_dash="dash",
+            line_color="#5D6D7E",
+            layer="below"
+        )
+        is_strong = event['windspeed_10m'] >= 20 or event['windgusts_10m'] >= 20
+        annotation_text = "Forte" if is_strong else "Calmaria"
+
+        fig.add_annotation(
+            x=event['time'],
+            y=max(event['windspeed_10m'], event['windgusts_10m']) + 2,
+            text=annotation_text,
+            showarrow=False,
+            bgcolor="#ffffff",
+            bordercolor="#5D6D7E",
+            borderwidth=1,
+            font=dict(size=10)
+        )
+        tickvals.append(event['time'])
+        ticktext.append(event['time'].strftime('%d/%m %H:%M'))
+
+    # Linhas de grade diárias
+    days = future_72h['time'].dt.normalize().unique()
+    for day in days:
+        fig.add_vline(x=day, line_width=1.5, line_color="#34495E", layer="below")
+
+    fig.update_layout(xaxis=dict(tickvals=tickvals, ticktext=ticktext))
+
+    return fig
+
 # ---------- Dados ----------
 df = fetch_forecast()
 
@@ -268,20 +377,15 @@ with colB:
     </div>
     """, unsafe_allow_html=True)
 
+# ---------- Gráfico de 72h ----------
+st.markdown('<h2 class="section-header">Previsão para as Próximas 72 Horas</h2>', unsafe_allow_html=True)
+wind_chart = create_wind_chart(df)
+st.plotly_chart(wind_chart, use_container_width=True)
+
 # ---------- Tabela detalhada ----------
 st.markdown('<h2 class="section-header">Previsão Detalhada por Hora</h2>', unsafe_allow_html=True)
-st.markdown('<div class="card">', unsafe_allow_html=True)
 
 icon_nav = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-navigation"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>'
-
-# Cabeçalho da tabela
-st.markdown("""
-<div class="table-header">
-    <div class="col">HORA</div>
-    <div class="col">VENTO (KM/H)</div>
-    <div class="col">DIREÇÃO</div>
-</div>
-""", unsafe_allow_html=True)
 
 # Paginação
 if "rows" not in st.session_state:
@@ -291,13 +395,24 @@ if "rows" not in st.session_state:
 now = pd.Timestamp.now(tz="America/Sao_Paulo").floor('h')
 future_df = df[df["time"] >= now]
 
+table_html = '<div class="card">'
+
+# Cabeçalho da tabela
+table_html += """
+<div class="table-header">
+    <div class="col">HORA</div>
+    <div class="col">VENTO (KM/H)</div>
+    <div class="col">DIREÇÃO</div>
+</div>
+"""
+
 for _, r in future_df.head(st.session_state.rows).iterrows():
     gust = int(r["windgusts_10m"])
     ws = int(r["windspeed_10m"])
     arrow_style = f"transform:rotate({int(r['winddirection_10m'])}deg);"
     _, desc = wind_dir_text(float(r["winddirection_10m"]))
 
-    st.markdown(f"""
+    table_html += f"""
     <div class="table-row">
         <div class="col font-semibold">{r['hora']}</div>
         <div class="col">
@@ -309,9 +424,11 @@ for _, r in future_df.head(st.session_state.rows).iterrows():
             <span class="direction-text">{desc}</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
 
-st.markdown('</div>', unsafe_allow_html=True)
+table_html += '</div>'
+
+st.markdown(table_html, unsafe_allow_html=True)
 
 # Botão Carregar Mais
 if st.session_state.rows < len(future_df):
